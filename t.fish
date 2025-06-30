@@ -1,5 +1,5 @@
 function t
-  set -l base_prompt "Scrivi solo il codice Python. Nessuna dipendenza esterna. Nessun commento. Nessuna spiegazione. Un solo blocco di codice:"
+  set -l base_prompt "Scrivi solo il codice python. privilegia l'uso di subprocess. Nessun commento. Nessuna spiegazione. Un solo blocco di codice: utente user sistema linuxmint64bit"
   set -l prompt (string join " " $argv)
 
   if test -z "$prompt"
@@ -9,7 +9,7 @@ function t
 
   set -l full_prompt "$base_prompt $prompt"
 
-  echo "$full_prompt" | ollama run mistral | tee /tmp/ai_response
+  echo "$full_prompt" | ollama run llama3.1:8b | tee /tmp/ai_response
 
   echo -e "\n"
 
@@ -33,7 +33,7 @@ function t
     switch $scelta
       case Y y
         chmod +x $tmpfile
-        python3 $tmpfile
+        runpy $tmpfile
         break
       case N n
         echo "Annullato."

@@ -24,18 +24,19 @@
 ## Installation (Bash)
 
 1. Save the script as `t` and make it executable:
+   
    ```bash
    chmod +x t
    ```
 
 2. Move it to a directory in your `$PATH`:
-
+   
    ```bash
    sudo mv t /usr/local/bin/
    ```
 
 3. Use it:
-
+   
    ```bash
    t "write a function that sums two numbers"
    ```
@@ -44,53 +45,11 @@
 
 ## Installation (Fish shell)
 
-1. Create the file `~/.config/fish/functions/t.fish` with the following content:
+1. Copy the file t.fisn in
 
-````fish
-function t
-  set -l base_prompt "Scrivi solo il codice Python. Nessuna dipendenza esterna. Nessun commento. Nessuna spiegazione. Un solo blocco di codice:"
-  set -l prompt (string join " " $argv)
+2. `~/.config/fish/functions/`  and runpy in `/usr/local/bin`
 
-  if test -z "$prompt"
-    echo -e "\033[1;31m[!] Missing prompt\033[0m"
-    return 1
-  end
-
-  set -l full_prompt "$base_prompt $prompt"
-  echo "$full_prompt" | ollama run mistral | tee /tmp/ai_response
-
-  set -l tmpfile (mktemp /tmp/ai_script_XXXX.py)
-  awk '
-    BEGIN { in_code=0 }
-    /^\s*```/ {
-      if (in_code == 0) { in_code=1; next }
-      else { exit }
-    }
-    in_code { print }
-  ' /tmp/ai_response | sed '/^\s*$/d' > "$tmpfile"
-
-  while true
-    read -l -P "Run it? [Y/n/e] " choice
-    set choice (string lower "$choice")
-
-    if test -z "$choice" -o "$choice" = "y"
-      chmod +x "$tmpfile"
-      python3 "$tmpfile"
-      break
-    else if test "$choice" = "n"
-      echo "Cancelled."
-      break
-    else if test "$choice" = "e"
-      set -l editor (set -q EDITOR; and echo $EDITOR; or echo nano)
-      $editor "$tmpfile"
-    else
-      echo "Invalid choice."
-    end
-  end
-end
-````
-
-2. Save and make it available with:
+3. Save and make it available with:
 
 ```fish
 funcsave t
@@ -125,8 +84,7 @@ def gcd(a, b):
 
 Distributed under the [MIT License](LICENSE).
 
-````
-
+```
 ---
 
 ### ✅ `LICENSE` (MIT License)
@@ -152,7 +110,7 @@ PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIG
 HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-````
+```
 
 ---
 
@@ -167,3 +125,4 @@ __pycache__/
 # AI output files
 /tmp/ai_response
 /tmp/ai_script_*.py
+```
