@@ -26,7 +26,7 @@
 1. Save the script as `t` and make it executable:
    ```bash
    chmod +x t
-````
+   ```
 
 2. Move it to a directory in your `$PATH`:
 
