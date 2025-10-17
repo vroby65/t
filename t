@@ -7,7 +7,7 @@ prompt="$*"
 full_prompt="$base_prompt $prompt"
 tmpfile=$(mktemp /tmp/ai_script_XXXX.py)
 
-ollama run llama3.1:8b <<< "$full_prompt" | tee /tmp/ai_response
+ollama run deepseek-v3.1:671b-cloud <<< "$full_prompt" | tee /tmp/ai_response
 
 awk '/```/{p^=1;next}p' /tmp/ai_response > "$tmpfile"
 [ ! -s "$tmpfile" ] && awk 'NF' /tmp/ai_response > "$tmpfile"
