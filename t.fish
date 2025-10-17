@@ -9,7 +9,7 @@ function t
 
   set -l full_prompt "$base_prompt $prompt"
 
-  echo "$full_prompt" | ollama run llama3.1:8b | tee /tmp/ai_response
+  echo "$full_prompt" | ollama run deepseek-v3.1:671b-cloud | tee /tmp/ai_response
 
   echo -e "\n"
 
