@@ -4,7 +4,7 @@
 
 ## Features
 
-- Sends prompts to `ollama run mistral`
+- Sends prompts to `ollama run deepseek-v3.1:671b-cloud  --hidethinking `
 - Filters and extracts only the Python code block
 - Prompts to run/edit/discard the result
 - Minimal: no external Python libraries used
@@ -15,8 +15,9 @@
 ## Requirements
 
 - [Ollama](https://ollama.com) installed
-- The `mistral` model pulled (`ollama pull mistral`)
+- The `deepseek-v3.1:671b-cloud` model pulled (`ollama pull deepseek-v3.1:671b-cloud  --hidethinking `)
 - Python 3
+- runpy (Utility that automatically resolves Python dependencies and runs program.py)
 - An editor like `nano`, `vim`, etc. (respects `$EDITOR`)
 
 ---
@@ -27,12 +28,14 @@
    
    ```bash
    chmod +x t
+   chmod +x runpy
    ```
 
 2. Move it to a directory in your `$PATH`:
    
    ```bash
    sudo mv t /usr/local/bin/
+   sudo mv runpy /usr/local/bin
    ```
 
 3. Use it:
