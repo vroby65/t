@@ -1,5 +1,5 @@
 function t
-  set -l base_prompt "Scrivi solo il codice python. privilegia l'uso di subprocess. Nessun commento. Nessuna spiegazione. Un solo blocco di codice:"
+  set -l base_prompt "Scrivi SOLO un blocco di codice python racchiuso in triple backticks, senza testo fuori dal blocco. Scrivi solo il codice python. privilegia l'uso di subprocess. Nessun commento. Nessuna spiegazione. Specifica sempre che è python. Un solo blocco di codice:"
   set -l prompt (string join " " $argv)
 
   if test -z "$prompt"
@@ -8,7 +8,7 @@ function t
   end
 
   set -l full_prompt "$base_prompt $prompt"
-  echo "$full_prompt" | ollama run deepseek-v3.1:671b-cloud | tee /tmp/ai_response
+  echo "$full_prompt" | ollama run deepseek-v3.1:671b-cloud  --hidethinking | tee /tmp/ai_response
   echo -e "\n"
 
   # crea un file temporaneo nella home

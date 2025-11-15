@@ -1,61 +1,119 @@
 #!/usr/bin/env python3
-import os, sys, subprocess, re
+"""
+runpy — Minimal tool to run a Python script with automatic isolated dependencies
 
-def parse_imports(file):
-    with open(file) as f:
+Usage:
+    ./runpy your_script.py [args...]
+
+What it does:
+1. Parses your Python file to detect third-party imports.
+2. Searches for a local requirements.txt file (next to the script or in the cwd)
+3. Creates an isolated virtual environment under .venv-runpy/<scriptname>.
+4. Installs missing dependencies automatically.
+5. Runs the script inside that environment.
+"""
+
+import os
+import sys
+import subprocess
+import re
+
+
+def parse_imports(file_path):
+    """Parse a Python script and extract top-level third-party module names."""
+    with open(file_path, "r", encoding="utf-8") as f:
         code = f.read()
 
     std = sys.stdlib_module_names if hasattr(sys, "stdlib_module_names") else []
 
-    # Trova sia "import x", sia "from x import y"
+    # Match both "import x" and "from x import y"
     matches = re.findall(r'^\s*(?:import|from)\s+([^\n]+)', code, re.M)
     modules = set()
 
     for line in matches:
-        parts = re.split(r'[ ,]+', line)
-        for part in parts:
-            if part in ("as", "import"):
-                continue
-            name = part.split('.')[0]
-            if name and name not in std and name.isidentifier():
-                modules.add(name)
+        # Extract the first token before a space or dot (top-level module)
+        first = line.split()[0].split('.')[0]
+        if first and first not in std and first.isidentifier():
+            modules.add(first)
 
     return sorted(modules)
 
-    
+
+def parse_requirements(req_file):
+    """Read a requirements.txt file and extract valid dependency lines."""
+    deps = []
+    with open(req_file, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            deps.append(line)
+    return deps
+
+
 def create_env(env_dir):
+    """Create a virtual environment if it doesn't already exist."""
     if not os.path.exists(env_dir):
         subprocess.run([sys.executable, "-m", "venv", env_dir], check=True)
 
+
+def get_bin_path(env_dir, exe_name):
+    """Return the correct path to a binary inside the virtualenv. """
+    if os.name == "nt":
+        return os.path.join(env_dir, "Scripts", exe_name + ".exe")
+    else:
+        return os.path.join(env_dir, "bin", exe_name)
+
+
 def install_deps(env_dir, deps):
-    pip = os.path.join(env_dir, "bin", "pip")
+    """Install dependencies inside the virtual environment."""
+    pip = get_bin_path(env_dir, "pip")
     subprocess.run([pip, "install", *deps], check=True)
 
+
 def run_script(env_dir, script, args):
-    py = os.path.join(env_dir, "bin", "python")
+    """Run the target Python script inside the isolated environment."""
+    py = get_bin_path(env_dir, "python")
     os.execv(py, [py, script] + args)
 
+
 def main():
+    """Main entry point."""
     if len(sys.argv) < 2:
         print("Usage: runpy your_script.py [args...]")
         return
+
     script = sys.argv[1]
-    env = os.path.join(".venv-runpy", os.path.basename(script))
+    env_dir = os.path.join(".venv-runpy", os.path.basename(script))
     os.makedirs(".venv-runpy", exist_ok=True)
 
     print(f"🧠 Analyzing dependencies in {script}...")
     deps = parse_imports(script)
-    print("📦 Dependencies found:", deps)
 
-    print(f"📁 Creating virtual environment in {env}...")
-    create_env(env)
+    # Search for requirements.txt near the script or in the current directory
+    possible_locations = [
+        os.path.join(os.path.dirname(script), "requirements.txt"),
+        os.path.join(os.getcwd(), "requirements.txt")
+    ]
+
+    for req_file in possible_locations:
+        if os.path.isfile(req_file):
+            print(f"📄 Found {req_file}, including its dependencies...")
+            deps.extend(parse_requirements(req_file))
+
+    deps = sorted(set(deps))
+    print("📦 Dependencies found:", deps or "(none)")
+
+    print(f"📁 Creating virtual environment in {env_dir}...")
+    create_env(env_dir)
 
     if deps:
         print("📥 Installing dependencies...")
-        install_deps(env, deps)
+        install_deps(env_dir, deps)
 
     print("🚀 Running script...")
-    run_script(env, script, sys.argv[2:])
+    run_script(env_dir, script, sys.argv[2:])
+
 
 if __name__ == "__main__":
     main()
