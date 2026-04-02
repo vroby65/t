@@ -1,131 +1,92 @@
 # t
 
-`t` is a terminal script (for Bash and Fish) that sends a prompt to [Ollama](https://ollama.com) using the `mistral` model, extracts only the Python code from the response, and lets you choose whether to run, edit, or discard it.
+`t` is a small Bash/Fish helper that sends a prompt to [Ollama](https://ollama.com), asks `deepseek-v3.2:cloud` to return only Python code, extracts the first fenced code block, and lets you run, edit, discard, or save the generated script.
 
 ## Features
 
-- Sends prompts to `ollama run deepseek-v3.1:671b-cloud  --hidethinking `
-- Filters and extracts only the Python code block
-- Prompts to run/edit/discard the result
-- Minimal: no external Python libraries used
-- Works in both Bash and Fish
+- Bash script (`t`) and Fish function (`t.fish`)
+- Uses `ollama run deepseek-v3.2:cloud`
+- Supports `-y` for non-interactive execution
+- Adds `--hidethinking` automatically when `-y` is used
+- Extracts only the Python code block from the model output
+- Applies a Linux fallback for `LOCALAPPDATA`
+- Uses `runpy` to install dependencies and run the generated script
+- Respects `$EDITOR`; defaults to `micro`
 
----
+## What `runpy` does
+
+`runpy` analyzes the generated Python file, detects third-party imports with AST parsing, includes dependencies from a nearby `requirements.txt` when present, creates an isolated virtual environment, installs dependencies, runs the script, and removes the environment afterwards.
+
+It also resolves several common import-to-package mismatches such as:
+
+- `cv2` -> `opencv-python`
+- `PIL` -> `Pillow`
+- `yaml` -> `PyYAML`
+- `sklearn` -> `scikit-learn`
 
 ## Requirements
 
 - [Ollama](https://ollama.com) installed
-- The `deepseek-v3.1:671b-cloud` model pulled (`ollama pull deepseek-v3.1:671b-cloud  --hidethinking `)
-- Python 3
-- runpy (Utility that automatically resolves Python dependencies and runs program.py)
-- An editor like `nano`, `vim`, etc. (respects `$EDITOR`)
+- `deepseek-v3.2:cloud` available locally:
 
----
+```bash
+ollama pull deepseek-v3.2:cloud
+```
+
+- Python 3 with `venv`
+- `runpy` available in your `PATH`
+- `fish` only if you want the Fish function
+- An editor in `$EDITOR`, or `micro`
 
 ## Installation (Bash)
 
-1. Save the script as `t` and make it executable:
-   
-   ```bash
-   chmod +x t
-   chmod +x runpy
-   ```
-
-2. Move it to a directory in your `$PATH`:
-   
-   ```bash
-   sudo mv t /usr/local/bin/
-   sudo mv runpy /usr/local/bin
-   ```
-
-3. Use it:
-   
-   ```bash
-   t "write a function that sums two numbers"
-   ```
-
----
-
-## Installation (Fish shell)
-
-1. Copy the file t.fisn in
-
-2. `~/.config/fish/functions/`  and runpy in `/usr/local/bin`
-
-3. Save and make it available with:
-
-```fish
-funcsave t
+```bash
+chmod +x t runpy
+sudo cp t /usr/local/bin/t
+sudo cp runpy /usr/local/bin/runpy
 ```
 
-3. Then use it like this:
+## Installation (Fish)
+
+```bash
+chmod +x t.fish runpy
+cp t.fish ~/.config/fish/functions/t.fish
+sudo cp runpy /usr/local/bin/runpy
+```
+
+Open a new Fish session or reload the function:
+
+```fish
+functions -e t
+source ~/.config/fish/functions/t.fish
+```
+
+## Usage
+
+Interactive mode:
+
+```bash
+t "write a function that sums two numbers"
+```
+
+Auto-confirm mode:
+
+```bash
+t -y "download a file and extract it"
+```
+
+Fish usage:
 
 ```fish
 t "create a class named Point with x and y attributes"
 ```
 
----
+## Behavior
 
-## Example
-
-```bash
-t "function to calculate the greatest common divisor"
-```
-
-Response:
-
-```python
-def gcd(a, b):
-    while b:
-        a, b = b, a % b
-    return a
-```
-
----
+- Without `-y`, `t` shows the model output, asks whether to run the script, and lets you save it afterwards.
+- With `-y`, `t` skips the prompt, runs the script immediately, and removes the temporary file afterwards.
+- Choosing `e` opens the generated script in your editor before execution.
 
 ## License
 
-Distributed under the [MIT License](LICENSE).
-
-```
----
-
-### ✅ `LICENSE` (MIT License)
-
-```text
-MIT License
-
-Copyright (c) 2025 [Your Name]
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the “Software”), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
-
----
-
-### ✅ `.gitignore`
-
-```gitignore
-# Temporary files
-*.pyc
-__pycache__/
-*.swp
-
-# AI output files
-/tmp/ai_response
-/tmp/ai_script_*.py
-```
+This repository does not currently include a separate `LICENSE` file.

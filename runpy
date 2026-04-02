@@ -13,30 +13,170 @@ What it does:
 5. Runs the script inside that environment.
 """
 
+import ast
+import functools
 import os
-import sys
+import shutil
 import subprocess
-import re
+import sys
+from importlib import metadata
+
+
+COMMON_PACKAGE_NAMES = {
+    "PIL": "Pillow",
+    "Crypto": "pycryptodome",
+    "OpenGL": "PyOpenGL",
+    "OpenSSL": "pyOpenSSL",
+    "bs4": "beautifulsoup4",
+    "cv2": "opencv-python",
+    "dateutil": "python-dateutil",
+    "dns": "dnspython",
+    "fitz": "PyMuPDF",
+    "serial": "pyserial",
+    "sklearn": "scikit-learn",
+    "yaml": "PyYAML",
+}
+
+
+class ImportCollector(ast.NodeVisitor):
+    """Collect imported top-level modules from static and simple dynamic imports."""
+
+    def __init__(self):
+        self.modules = set()
+        self.importlib_aliases = {"importlib"}
+        self.import_module_aliases = {"import_module"}
+        self.typing_aliases = {"typing"}
+        self.type_checking_aliases = {"TYPE_CHECKING"}
+
+    def add_module(self, module_name):
+        """Store the top-level package part of an import."""
+        top_level = module_name.split(".", 1)[0].strip()
+        if top_level and top_level.isidentifier():
+            self.modules.add(top_level)
+
+    def visit_Import(self, node):
+        for alias in node.names:
+            self.add_module(alias.name)
+            if alias.name == "importlib":
+                self.importlib_aliases.add(alias.asname or alias.name)
+            elif alias.name == "typing":
+                self.typing_aliases.add(alias.asname or alias.name)
+
+    def visit_ImportFrom(self, node):
+        if node.level == 0 and node.module:
+            self.add_module(node.module)
+            if node.module == "importlib":
+                for alias in node.names:
+                    if alias.name == "import_module":
+                        self.import_module_aliases.add(alias.asname or alias.name)
+            elif node.module == "typing":
+                for alias in node.names:
+                    if alias.name == "TYPE_CHECKING":
+                        self.type_checking_aliases.add(alias.asname or alias.name)
+
+    def visit_Call(self, node):
+        dynamic_import = None
+
+        if isinstance(node.func, ast.Name):
+            if node.func.id == "__import__":
+                dynamic_import = self._get_literal_import_arg(node)
+            elif node.func.id in self.import_module_aliases:
+                dynamic_import = self._get_literal_import_arg(node)
+        elif (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "import_module"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in self.importlib_aliases
+        ):
+            dynamic_import = self._get_literal_import_arg(node)
+
+        if dynamic_import:
+            self.add_module(dynamic_import)
+
+        self.generic_visit(node)
+
+    def visit_If(self, node):
+        if self._is_type_checking_guard(node.test):
+            for child in node.orelse:
+                self.visit(child)
+            return
+
+        self.generic_visit(node)
+
+    @staticmethod
+    def _get_literal_import_arg(node):
+        """Return the first positional argument when it is a string literal."""
+        if not node.args:
+            return None
+
+        first_arg = node.args[0]
+        if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+            return first_arg.value
+
+        return None
+
+    def _is_type_checking_guard(self, node):
+        """Return True when an if-block only runs during static type checking."""
+        if isinstance(node, ast.Name):
+            return node.id in self.type_checking_aliases
+
+        return (
+            isinstance(node, ast.Attribute)
+            and node.attr == "TYPE_CHECKING"
+            and isinstance(node.value, ast.Name)
+            and node.value.id in self.typing_aliases
+        )
 
 
 def parse_imports(file_path):
-    """Parse a Python script and extract top-level third-party module names."""
+    """Parse a Python script and extract installable third-party dependencies."""
     with open(file_path, "r", encoding="utf-8") as f:
         code = f.read()
 
-    std = sys.stdlib_module_names if hasattr(sys, "stdlib_module_names") else []
+    tree = ast.parse(code, filename=file_path)
+    collector = ImportCollector()
+    collector.visit(tree)
 
-    # Match both "import x" and "from x import y"
-    matches = re.findall(r'^\s*(?:import|from)\s+([^\n]+)', code, re.M)
-    modules = set()
+    stdlib_modules = (
+        set(sys.stdlib_module_names)
+        if hasattr(sys, "stdlib_module_names")
+        else set(sys.builtin_module_names)
+    )
+    script_dir = os.path.abspath(os.path.dirname(file_path) or ".")
+    dependencies = set()
 
-    for line in matches:
-        # Extract the first token before a space or dot (top-level module)
-        first = line.split()[0].split('.')[0]
-        if first and first not in std and first.isidentifier():
-            modules.add(first)
+    for module_name in collector.modules:
+        if module_name in stdlib_modules or is_local_module(module_name, script_dir):
+            continue
+        dependencies.add(resolve_package_name(module_name))
 
-    return sorted(modules)
+    return sorted(dependencies, key=str.lower)
+
+
+def is_local_module(module_name, script_dir):
+    """Return True when the import resolves to a local module near the script."""
+    module_file = os.path.join(script_dir, module_name + ".py")
+    package_dir = os.path.join(script_dir, module_name)
+    return os.path.isfile(module_file) or os.path.isdir(package_dir)
+
+
+def resolve_package_name(module_name):
+    """Translate an import name to the package name expected by pip."""
+    if module_name in COMMON_PACKAGE_NAMES:
+        return COMMON_PACKAGE_NAMES[module_name]
+
+    installed_packages = get_installed_package_map()
+    distributions = sorted(set(installed_packages.get(module_name, [])), key=str.lower)
+    if len(distributions) == 1:
+        return distributions[0]
+
+    return module_name
+
+
+@functools.lru_cache(maxsize=1)
+def get_installed_package_map():
+    """Cache installed package metadata for name resolution."""
+    return metadata.packages_distributions()
 
 
 def parse_requirements(req_file):
@@ -74,46 +214,62 @@ def install_deps(env_dir, deps):
 def run_script(env_dir, script, args):
     """Run the target Python script inside the isolated environment."""
     py = get_bin_path(env_dir, "python")
-    os.execv(py, [py, script] + args)
+    completed = subprocess.run([py, script] + args)
+    return completed.returncode
+
+
+def remove_env(env_dir):
+    """Delete the virtual environment and its parent folder if empty."""
+    if os.path.isdir(env_dir):
+        shutil.rmtree(env_dir)
+
+    parent_dir = os.path.dirname(env_dir)
+    if parent_dir and os.path.isdir(parent_dir) and not os.listdir(parent_dir):
+        os.rmdir(parent_dir)
 
 
 def main():
     """Main entry point."""
     if len(sys.argv) < 2:
-        print("Usage: runpy your_script.py [args...]")
-        return
+        print("Usage: runpy your_script.py [args...]", flush=True)
+        return 1
 
     script = sys.argv[1]
     env_dir = os.path.join(".venv-runpy", os.path.basename(script))
     os.makedirs(".venv-runpy", exist_ok=True)
 
-    print(f"🧠 Analyzing dependencies in {script}...")
-    deps = parse_imports(script)
+    try:
+        print(f"🧠 Analyzing dependencies in {script}...", flush=True)
+        deps = parse_imports(script)
 
-    # Search for requirements.txt near the script or in the current directory
-    possible_locations = [
-        os.path.join(os.path.dirname(script), "requirements.txt"),
-        os.path.join(os.getcwd(), "requirements.txt")
-    ]
+        # Search for requirements.txt near the script or in the current directory
+        possible_locations = [
+            os.path.join(os.path.dirname(script), "requirements.txt"),
+            os.path.join(os.getcwd(), "requirements.txt")
+        ]
 
-    for req_file in possible_locations:
-        if os.path.isfile(req_file):
-            print(f"📄 Found {req_file}, including its dependencies...")
-            deps.extend(parse_requirements(req_file))
+        for req_file in possible_locations:
+            if os.path.isfile(req_file):
+                print(f"📄 Found {req_file}, including its dependencies...", flush=True)
+                deps.extend(parse_requirements(req_file))
 
-    deps = sorted(set(deps))
-    print("📦 Dependencies found:", deps or "(none)")
+        deps = sorted(set(deps))
+        print("📦 Dependencies found:", deps or "(none)", flush=True)
 
-    print(f"📁 Creating virtual environment in {env_dir}...")
-    create_env(env_dir)
+        print(f"📁 Creating virtual environment in {env_dir}...", flush=True)
+        create_env(env_dir)
 
-    if deps:
-        print("📥 Installing dependencies...")
-        install_deps(env_dir, deps)
+        if deps:
+            print("📥 Installing dependencies...", flush=True)
+            install_deps(env_dir, deps)
 
-    print("🚀 Running script...")
-    run_script(env_dir, script, sys.argv[2:])
+        print("🚀 Running script...", flush=True)
+        return run_script(env_dir, script, sys.argv[2:])
+    finally:
+        if os.path.exists(env_dir):
+            print(f"🧹 Removing virtual environment {env_dir}...", flush=True)
+            remove_env(env_dir)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
