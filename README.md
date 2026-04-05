@@ -5,7 +5,7 @@
 ## Features
 
 - Bash script (`t`) and Fish function (`t.fish`)
-- Uses `ollama run deepseek-v3.2:cloud`
+- Uses `ollama run qwen3-coder-next:cloud`
 - Supports `-y` for non-interactive execution
 - Adds `--hidethinking` automatically when `-y` is used
 - Extracts only the Python code block from the model output

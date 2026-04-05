@@ -1,3 +1,4 @@
+# exec AI
 function t
   argparse -n t 'y' -- $argv
   or return 1
@@ -16,12 +17,16 @@ function t
   end
 
   set -l full_prompt "$base_prompt $prompt"
-  set -l ollama_args run deepseek-v3.2:cloud
+  set -l ollama_args run qwen3-coder-next:cloud
   if test $auto_yes -eq 1
     set -a ollama_args --hidethinking
   end
 
-  echo "$full_prompt" | ollama $ollama_args | tee /tmp/ai_response
+  if test $auto_yes -eq 1
+    echo "$full_prompt" | ollama $ollama_args > /tmp/ai_response
+  else
+    echo "$full_prompt" | ollama $ollama_args | tee /tmp/ai_response
+  end
   echo -e "\n"
 
   # crea un file temporaneo nella home
