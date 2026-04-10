@@ -46,10 +46,11 @@ function t
   sed -i "s/os.getenv('LOCALAPPDATA')/os.getenv('LOCALAPPDATA') or os.path.expanduser('~\/.config')/g" $tmpfile
 
   while true
+    set -l scelta
     if test $auto_yes -eq 1
       set scelta "y"
     else
-      read -l --prompt-str "Eseguire? [Y/n/e] " scelta
+      read --prompt-str "Eseguire? [Y/n/e] " scelta
       if test -z "$scelta"
         set scelta "y"
       end
