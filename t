@@ -33,30 +33,37 @@ if [[ -z "$prompt" ]]; then
 fi
 
 full_prompt="$base_prompt $prompt"
-ollama_args=(run qwen3-coder-next:cloud)
+ollama_args=(run qwen3-coder-next:cloud --nowordwrap)
+response_file="$(mktemp "${TMPDIR:-/tmp}/ai_response_XXXX.txt")"
+
+cleanup() {
+  rm -f "$response_file"
+}
+
+trap cleanup EXIT
 
 if (( auto_yes )); then
   ollama_args+=(--hidethinking)
 fi
 
 if (( auto_yes )); then
-  printf '%s\n' "$full_prompt" | ollama "${ollama_args[@]}" > /tmp/ai_response
+  printf '%s\n' "$full_prompt" | ollama "${ollama_args[@]}" > "$response_file"
 else
-  printf '%s\n' "$full_prompt" | ollama "${ollama_args[@]}" | tee /tmp/ai_response
+  printf '%s\n' "$full_prompt" | ollama "${ollama_args[@]}" | tee "$response_file"
 fi
 
 printf '\n'
 
-tmpfile="$(mktemp "$HOME/ai_script_XXXX.py")"
+tmpfile="$(mktemp "$PWD/ai_script_XXXX.py")"
 
-awk '
+perl -pe 's/\e\[[0-9;?]*[ -\/]*[@-~]//g' "$response_file" | awk '
   BEGIN { in_code=0 }
   /^[[:space:]]*```/ {
     if (in_code == 0) { in_code=1; next }
     else { exit }
   }
   in_code { print }
-' /tmp/ai_response | sed '/^[[:space:]]*$/d' > "$tmpfile"
+' | sed '/^[[:space:]]*$/d' > "$tmpfile"
 
 sed -i "s/os.getenv('LOCALAPPDATA')/os.getenv('LOCALAPPDATA') or os.path.expanduser('~\/.config')/g" "$tmpfile"
 
@@ -71,17 +78,9 @@ while true; do
   case "$scelta" in
     Y|y)
       printf '\033[1;34m🚀 Running script...\033[0m\n'
-      cwd="$(pwd)"
-      venvdir="$HOME/.venv-runpy"
-      mkdir -p "$venvdir"
-
       chmod +x "$tmpfile"
       runpy "$tmpfile"
       printf '\033[1;32m✅ Esecuzione completata.\033[0m\n'
-
-      shortname="$(basename "$tmpfile")"
-      rm -rf "$venvdir/$shortname"
-      cd "$cwd" || exit 1
 
       if (( auto_yes )); then
         rm -f "$tmpfile"
@@ -90,8 +89,8 @@ while true; do
 
         read -r -p "Vuoi salvare lo script? [y/N] " save_choice
         if [[ "$save_choice" == "y" ]]; then
-          read -r -p "Percorso destinazione (default ~/): " save_path
-          [[ -z "$save_path" ]] && save_path="$HOME"
+          read -r -p "Percorso destinazione (default ./): " save_path
+          [[ -z "$save_path" ]] && save_path="$PWD"
           save_path="${save_path/#\~/$HOME}"
 
           read -r -p "Nome file (default ai_saved.py): " save_name

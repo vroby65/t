@@ -1,11 +1,11 @@
 # t
 
-`t` is a small Bash/Fish helper that sends a prompt to [Ollama](https://ollama.com), asks `deepseek-v3.2:cloud` to return only Python code, extracts the first fenced code block, and lets you run, edit, discard, or save the generated script.
+`t` is a small Bash/Fish helper that sends a prompt to [Ollama](https://ollama.com), asks `qwen3-coder-next:cloud` to return only Python code, extracts the first fenced code block, and lets you run, edit, discard, or save the generated script.
 
 ## Features
 
 - Bash script (`t`) and Fish function (`t.fish`)
-- Uses `ollama run qwen3-coder-next:cloud`
+- Uses `ollama run qwen3-coder-next:cloud --nowordwrap`
 - Supports `-y` for non-interactive execution
 - Adds `--hidethinking` automatically when `-y` is used
 - Extracts only the Python code block from the model output
@@ -27,10 +27,10 @@ It also resolves several common import-to-package mismatches such as:
 ## Requirements
 
 - [Ollama](https://ollama.com) installed
-- `deepseek-v3.2:cloud` available locally:
+- `qwen3-coder-next:cloud` available locally:
 
 ```bash
-ollama pull deepseek-v3.2:cloud
+ollama pull qwen3-coder-next:cloud
 ```
 
 - Python 3 with `venv`
